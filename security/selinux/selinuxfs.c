@@ -155,6 +155,14 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
 
+	/*
+	 * Headless server: SELinux stays permissive whatever is written here
+	 * (init writes 1 at boot), as on the Galaxy S8+ build, whose 8890q
+	 * kernel does the same. The kernel boots permissive (DEVELOP, no
+	 * enforcing= on the command line), so it never enforces.
+	 */
+	new_value = 0;
+
 	if (new_value != selinux_enforcing) {
 		length = task_has_security(current, SECURITY__SETENFORCE);
 		if (length)
