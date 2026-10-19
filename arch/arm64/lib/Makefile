@@ -8,6 +8,10 @@ ifeq ($(CONFIG_KERNEL_MODE_NEON), y)
 obj-$(CONFIG_XOR_BLOCKS)	+= xor-neon.o
 CFLAGS_REMOVE_xor-neon.o	+= -mgeneral-regs-only
 CFLAGS_xor-neon.o		+= -ffreestanding
+# LineageOS passes CPATH=/usr/include:... for the host tools, and clang
+# searches CPATH before its own headers: arm_neon.h would then get the
+# build host's glibc <stdint.h> instead of clang's freestanding one.
+unexport CPATH
 endif
 
 # Tell the compiler to treat all general purpose registers (with the
