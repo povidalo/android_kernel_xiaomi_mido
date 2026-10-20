@@ -478,6 +478,16 @@
 };
 
 &thermal_zones {
+	/*
+	 * Headless server: no case-temperature limits. case-therm-step
+	 * (msm8953-thermal.dtsi) throttled every CPU from case 60 C and did a
+	 * critical shutdown at case 75 C, protecting skin and battery; here the
+	 * battery is outside the case and nobody holds it. The chip's own
+	 * zones (deca-cpu-max-step 95 C, apc*-cpu*-step 105 C, ...) stay.
+	 * sdm450.dtsi and sdm632.dtsi drop this zone the same way.
+	 */
+	/delete-node/ case-therm-step;
+
 	xo-therm-adc {
 		polling-delay = <1000>;
 	};
