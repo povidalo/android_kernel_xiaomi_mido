@@ -28634,13 +28634,16 @@ WDI_ProcessPrefNetworkFoundInd
   WDI_LowLevelIndType   wdiInd;
   tpPrefNetwFoundParams pNetwFoundParams;
   wpt_uint32 msgsize;
+  wpt_uint32 paramsLen = sizeof(tPrefNetwFoundParams);
 
 
   /*-------------------------------------------------------------------------
     Sanity check
   -------------------------------------------------------------------------*/
   if (( NULL == pWDICtx ) || ( NULL == pEventData ) ||
-      ( NULL == pEventData->pEventData ))
+      ( NULL == pEventData->pEventData ) ||
+      ( pEventData->uEventDataSize <
+        sizeof(tPrefNetwFoundParams) - sizeof(pNetwFoundParams->freq) ))
   {
      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
                  "%s: Invalid parameters", __func__);
@@ -28652,6 +28655,28 @@ WDI_ProcessPrefNetworkFoundInd
     Extract indication and send it to UMAC
   -------------------------------------------------------------------------*/
   pNetwFoundParams = (tpPrefNetwFoundParams)(pEventData->pEventData);
+
+  /* Older WCNSS firmware (CNSS-PR-4-0-352 on msm8953/mido) sends this
+   * indication without the trailing freq field, so the frame starts 4 bytes
+   * earlier. Taking it from sizeof(tPrefNetwFoundParams) dropped the frame
+   * control and duration: the BSSID was read 4 bytes late and the IEs were
+   * garbage, so Android rejected every PNO result (empty SSID) and never
+   * reconnected while the screen was off. The message size tells the two
+   * layouts apart. */
+  if (pEventData->uEventDataSize ==
+      sizeof(tPrefNetwFoundParams) - sizeof(pNetwFoundParams->freq) +
+      pNetwFoundParams->frameLength)
+  {
+     paramsLen -= sizeof(pNetwFoundParams->freq);
+  }
+  else if (pEventData->uEventDataSize <
+           sizeof(tPrefNetwFoundParams) + pNetwFoundParams->frameLength)
+  {
+     WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
+                 "%s: truncated indication (%u bytes, frame %u)", __func__,
+                 pEventData->uEventDataSize, pNetwFoundParams->frameLength);
+     return WDI_STATUS_E_FAILURE;
+  }
 
   msgsize = sizeof(tPrefNetwFoundParams) + pNetwFoundParams->frameLength;
   wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.pData =
@@ -28673,9 +28698,10 @@ WDI_ProcessPrefNetworkFoundInd
   wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.rssi = pNetwFoundParams->rssi;
   wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.frameLength =
       pNetwFoundParams->frameLength;
-  wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.freq = pNetwFoundParams->freq;
+  wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.freq =
+      (paramsLen == sizeof(tPrefNetwFoundParams)) ? pNetwFoundParams->freq : 0;
   wpalMemoryCopy( wdiInd.wdiIndicationData.wdiPrefNetworkFoundInd.pData,
-      (wpt_uint8 *)pEventData->pEventData + sizeof(tPrefNetwFoundParams),
+      (wpt_uint8 *)pEventData->pEventData + paramsLen,
       pNetwFoundParams->frameLength);
 
   /*Fill in the indication parameters*/
